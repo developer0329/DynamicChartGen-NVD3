@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<link href="nvd/nv.d3.css" rel="stylesheet" type="text/css">
+		<style>
+			body { overflow-y:scroll; }
+			text { font: 12px sans-serif; }
+			svg { display: block; }			
+			#chart{ float: left; margin: 10px; }			
+			#another_tooltip{ padding:20px; float: right;}			
+			#chart{ width:60%; }			
+			#chart svg { padding:10px; border: 1px solid; margin-top:10px; }			
+			.ui-input{ padding:5px; }			
+			.ui-input span{ width: 150px; margin-left:15px; }			
+			.dashed { stroke-dasharray: 5,5; }
+		</style>
+		
+		
+		<script src="lib/jquery.min.js"></script>
+		<script src="lib/d3.min.js" charset="utf-8"></script>
+		<script src="nvd/nv.d3.js"></script>
+		<script src="lib/queue.min.js"></script>
+		<script src="lib/jscolor.js"></script>
+				
+		<script src="src/tooltip.js"></script>
+		<script src="src/utils.js"></script>
+		<script src="src/models/legend.js"></script>
+		<script src="src/models/axis.js"></script>
+		<script src="src/models/scatter.js"></script>
+		<script src="src/models/line.js"></script>
+		<script src="src/models/lineChart.js"></script>
+		<script src="src/models/scatterChart.js"></script>
+		
+	</head>
+	<body>
+		<div class="ui-input">
+			<span>Graph ShortName:</span>
+			<input type="text" id="chart-shortname"></input>	
+			<span>Graph Title:</span>
+			<input type="text" id="chart-title"></input>
+		</div>
+		<div class="ui-input">
+			<span>JSON URL:</span>
+			<input type="text" id="json-url"></input>
+		</div>
+		<div class="ui-input">
+			<span>Graph Type:</span>
+			<select id="chart-type" onchange="setChartType()">
+				<option value="line">Line</option>
+				<option value="dot">Dot</option>
+				<option value="bar">Bar</option>
+				<option value="candle">Candle Stick</option>
+				<option value="vector">Vector</option>
+			</select>
+			<span>AXIS:</span>
+			<select id="axis-type" onchange="setAxisType()">
+				<option value="left">Left</option>
+				<option value="right">Right</option>
+			</select>
+			<span>Tooltip:</span>
+			<select id="tooltip-type" onchange="setTooltipType()">
+				<option value="click">Display on Click</option>
+				<option value="hover">Display on Hover</option>
+				<option value="target-div">Display on Target Div</option>
+			</select>
+		</div>
+		<div class="ui-input">
+			<span>Window</span>
+			<select id="window-type" onchange="setWindowType()">
+				<option value="new">New Window</option>
+				<option value="exist1">Existing window No.1</option>
+				<option value="exist2">Existing window No.2</option>
+			</select>		
+		</div>
+		<div class="ui-input">
+			<span>Select Javascript Function:</span>
+			<input type="text" width="300px"></input>
+		</div>
+		<div class="ui-input">
+			<span>Color:</span><input id="chart-color" class="jscolor" value="ab2567">
+			<input type="button" value="Add Graph" onclick="addGraph()"></input>
+			<input type="button" value="Clear" onclick="clearGraph()"></input>
+		</div>
+		
+		
+		<div id="chart" class='with-3d-shadow with-transitions'></div>
+		<div id="another_tooltip"></div>
+	</body>
+	
+	<script>
+		var graphs = [];
+		var datas = [];
+		
+		var maxWindowCount = 10;
+		var cur_window = 0;
+		
+		var width = 400; 
+		var height = 200;
+		var zoom = 1.75;
+		
+		var chart_shortname;
+		var chart_title;
+		var data_url;
+		var	chart_Type;
+		var chart_color;
+		var axis_type;
+		var tooltip_type;
+		var window_type;
+		
+		var tooltip_val = "";
+		
+		function ChartDrawing(chart_id){
+			nv.addGraph(function() {
+			
+				var chart;
+				
+				if(chart_type == "line")
+				{
+					chart = nv.models.lineWithFocusChart()
+							.rightAlignYAxis(axis_type)
+							.average(function(d) { return d.mean; });
+
+					chart.xAxis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.x2Axis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.yAxis.tickFormat(d3.format(',.2f'));
+					chart.y2Axis.tickFormat(d3.format(',.2f'));
+					
+					
+				}
+				
+				if(chart_type == "dot")
+				{
+					chart = nv.models.scatterChart().rightAlignYAxis(axis_type);
+					chart.xAxis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.yAxis.tickFormat(d3.format('.02f'));
+				}
+				
+				if(chart_type == "bar")
+				{
+					chart = nv.models.multiBarChart()
+						.duration(300)
+						.margin({right: 60, left: 60})
+						.groupSpacing(0.1)
+						.rightAlignYAxis(axis_type);
+					
+					chart.xAxis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.yAxis.axisLabelDistance(-5).tickFormat(d3.format(',.01f'));
+				}
+/* 				if(chart_type == "candle")
+				{
+					var chart = nv.models.candlestickBarChart()
+							.x(function(d) { return d['date'] })
+							.y(function(d) { return d['close'] })
+							.duration(250)
+							.rightAlignYAxis(axis_type)
+							.margin({left: 75, bottom: 50});
+
+					chart.xAxis.tickFormat(function(d) { return d3.time.format('%x')(new Date(d));});
+					chart.yAxis.tickFormat(function(d,i){ return '$' + d3.format(',.1f')(d); });
+				}
+*/
+				if(chart_type == "vector" || chart_type == "candle")
+				{
+					chart = nv.models.lineWithFocusChart().showLegend(false)						
+						.options({
+							transitionDuration: 300,
+							useInteractiveGuideline: false
+						});
+				
+					chart.xAxis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.x2Axis.tickFormat(function(d) { return d3.time.format('%m/%d/%y')(new Date(d)) });
+					chart.yAxis.tickFormat(d3.format(',.2f'));
+					chart.y2Axis.tickFormat(d3.format(',.2f'));
+					
+					chart.defined(function (d,i) {
+						// returns false if Y value is non-numeric or null
+						return !isNaN(d.y) && d.y !== null
+					});
+				}
+				
+				if(chart_type == "bar")
+				{
+					chart.tooltip.contentGenerator( function (d) {
+							tooltip_val = d.data.tooltip;
+							return d.data.tooltip;
+						}
+					);
+				}
+				else
+				{
+					chart.tooltip.contentGenerator( function (d) {
+							tooltip_val = d.point.tooltip;
+							return d.point.tooltip;
+						}
+					)
+				}
+				
+				
+				var svg = d3.select('#svg-' + chart_id)
+					.datum(datas[chart_id-1])
+					.attr("width", width)
+					.attr("height", height)
+					.on("click", function(d){
+						$("#another_tooltip").empty();
+						$("#another_tooltip").append(tooltip_val);
+						return "";
+					})
+                    .call(chart);
+				
+				function setChartViewBox() {
+					var w = width * zoom,
+						h = height * zoom;
+					chart.width(w).height(h);
+					
+					svg.attr('viewBox', '0 0 ' + w + ' ' + h)
+						.transition().duration(500)
+						.call(chart);
+				}
+				
+				if(chart_type == "dot" || chart_type == "candle")
+				{
+					var zooming = d3.behavior.zoom()
+						.scaleExtent([1, 5])
+						.on("zoom", function() {
+							var e = d3.event;
+							zoom = e.scale;
+							setChartViewBox();
+						});
+						
+					svg.call(zooming);
+					setChartViewBox();
+				}
+                
+				nv.utils.windowResize(chart.update);
+                graphs[chart_id-1] = chart
+				
+				return chart;
+			})
+		}
+		
+		function readyData(){
+			
+			$.getJSON(data_url, function(result)
+			{
+				var json = JSON.parse(result);
+				
+				var select_chart;
+				
+				if(window_type == "new")
+				{
+					if(cur_window == maxWindowCount) return;
+					
+					cur_window++;
+					svg = d3.select("#chart").append("svg").attr("id", "svg-" + cur_window);
+					select_chart = cur_window;
+				}
+				else
+				{
+					if(window_type == "exist2")
+					{						
+						if(datas.length < 2)
+							return;
+							
+						select_chart = 2;
+					}
+					
+					if(window_type == "exist1")
+					{
+						if(datas.length < 1)
+							return;
+							
+						select_chart = 1;
+					}
+				}
+				
+				//For Dot Graph
+				var shapes = ['circle', 'cross', 'triangle-up', 'triangle-down', 'diamond', 'square'];
+				var random = d3.random.normal();
+				var PointData, StockData, VectorData;
+				
+				if(json["PointData"] != null)
+				{
+					var Values = [], Dot_Values = [], avg_val = 0;
+				 
+					PointData = json["PointData"]["Points"];   //  data/new_data2.json
+					
+					for(var i = 0; i < PointData.length; i++)
+					{
+						//PointType 1:DateTime, 2:Long, 3:DoubleVal					
+						
+						var x_PointObj = PointData[i]["X"];
+						var x_PointVal;
+						if(x_PointObj.PointType == 1) x_PointVal = Date.parse(x_PointObj.DateTimeVal);
+						if(x_PointObj.PointType == 2) x_PointVal = x_PointObj.NumberVal;			
+						if(x_PointObj.PointType == 3) x_PointVal = x_PointObj.DoubleVal;
+						
+						
+						
+						var y_PointObj = PointData[i]["Y"];
+						var y_PointVal;
+						if(y_PointObj.PointType == 1) y_PointVal = y_PointObj.DateTimeVal;				
+						if(y_PointObj.PointType == 2) y_PointVal = y_PointObj.NumberVal;				
+						if(y_PointObj.PointType == 3) y_PointVal = y_PointObj.DoubleVal;
+						
+						avg_val = avg_val + y_PointVal["Value"];
+
+						Values.push({ x: x_PointVal, y: y_PointVal["Value"], tooltip: PointData[i].HtmlTooltip });
+						
+						Dot_Values.push({
+							x: x_PointVal,
+							y: y_PointVal["Value"],
+							size: Math.random(),                                                  // Set Radius in Dot Charts
+							shape: (Math.random() > 0.95) ? shapes[i % 6] : "circle",             // Set Dot's Shape in Dot Charts
+							tooltip: PointData[i].HtmlTooltip
+						});
+					}
+					
+					if(chart_type == "line")
+					{
+						var line =  { 
+								key: "Line" + datas.length,
+								values: Values,
+								mean: avg_val/PointData.length,
+								color: chart_color 
+							};
+							
+						if( window_type == "new") 
+						{
+							var line_data = [line];						
+							datas.push(line_data);
+						}
+						else
+						{
+							if(window_type == "exist1")
+							{
+								datas[0].push(line);
+							}
+							if(window_type == "exist2")
+							{
+								datas[1].push(line);
+							}
+						}
+					}
+					
+					if(chart_type == "dot")
+					{
+						var dot =  { 
+								key: "Dot" + datas.length,
+								values: Dot_Values,
+								color: chart_color
+							};							
+						
+						if( window_type == "new") 
+						{
+							var dot_data = [dot];
+							datas.push(dot_data);
+						}
+						else
+						{
+							if(window_type == "exist1")
+							{
+								datas[0].push(dot);
+							}
+							if(window_type == "exist2")
+							{
+								datas[1].push(dot);
+							}
+						}
+					}
+					
+					if(chart_type == "bar")
+					{
+						var bar = { 
+								key: "Bar" + datas.length,
+								values: Values,
+								color: chart_color 
+							};
+							
+						if( window_type == "new") 
+						{
+							var bar_data = [bar];							
+							datas.push(bar_data);
+						}
+						else
+						{
+							if(window_type == "exist1")
+							{
+								datas[0].push(bar);
+							}
+							if(window_type == "exist2")
+							{
+								datas[1].push(bar);
+							}
+						}
+					}
+				}
+				
+				if(json["StockData"] != null)
+				{
+					StockData = json["StockData"]["Stocks"];  //  data/candlestickdata.json
+					var stock_data = [];
+					var stock_line_data = [];
+					
+					for(var i = 0; i < StockData.length; i++)
+					{
+						stock_data.push( {"date": Date.parse(StockData[i].Date), "open": StockData[i].Open, "high": StockData[i].High, "low": StockData[i].Low, "close": StockData[i].Close } );
+						stock_line_data.push({x: Date.parse(StockData[i].Date), y: +StockData[i].Close });
+					}
+					
+					var candle_data = [{values: stock_data}];
+					
+					var stock_line_value =  { 
+								key: "StockLine" + datas.length,
+								values: stock_line_data,
+								color: chart_color 
+							};
+					var stock_line = [stock_line_value];		
+					if(chart_type == "candle")
+					{
+						if( window_type == "new") 
+						{
+							datas.push(stock_line);
+						}
+						else
+						{
+							if(window_type == "exist1")
+							{
+								datas[0].push(stock_line_value);
+							}
+							if(window_type == "exist2")
+							{
+								datas[1].push(stock_line_value);
+							}
+						}
+					}
+				}
+				
+				if(json["VectorData"] != null)
+				{
+					VectorData = json["VectorData"]["Vectors"]; //  data/vectordata.json
+					var vector_data = [];
+					
+					for(var i = 0; i < VectorData.length; i++)
+					{
+						var vector_value = [];
+						
+						var x1_PointObj = VectorData[i]["X1"];
+						var x1_PointVal;
+						if(x1_PointObj.PointType == 1) x1_PointVal = Date.parse(x1_PointObj.DateTimeVal);
+						if(x1_PointObj.PointType == 2) x1_PointVal = x1_PointObj.NumberVal;			
+						if(x1_PointObj.PointType == 3) x1_PointVal = x1_PointObj.DoubleVal;
+						
+						var x2_PointObj = VectorData[i]["X2"];
+						var x2_PointVal;
+						if(x2_PointObj.PointType == 1) x2_PointVal = Date.parse(x2_PointObj.DateTimeVal);
+						if(x2_PointObj.PointType == 2) x2_PointVal = x2_PointObj.NumberVal;			
+						if(x2_PointObj.PointType == 3) x2_PointVal = x2_PointObj.DoubleVal;					
+						
+						var y1_PointObj = VectorData[i]["Y1"];
+						var y1_PointVal;
+						if(y1_PointObj.PointType == 1) y1_PointVal = y1_PointObj.DateTimeVal;				
+						if(y1_PointObj.PointType == 2) y1_PointVal = y1_PointObj.NumberVal;				
+						if(y1_PointObj.PointType == 3) y1_PointVal = y1_PointObj.DoubleVal;
+						
+						var y2_PointObj = VectorData[i]["Y2"];
+						var y2_PointVal;
+						if(y2_PointObj.PointType == 1) y2_PointVal = y2_PointObj.DateTimeVal;				
+						if(y2_PointObj.PointType == 2) y2_PointVal = y2_PointObj.NumberVal;				
+						if(y2_PointObj.PointType == 3) y2_PointVal = y2_PointObj.DoubleVal;
+						
+						vector_value.push({ x: x1_PointVal, y: y1_PointVal.Value,tooltip: VectorData[i].HtmlTooltip});
+						vector_value.push({ x: x2_PointVal, y: y2_PointVal.Value,tooltip: VectorData[i].HtmlTooltip});
+						
+						vector_data.push({ 
+							key:"vector" + i,
+							values: vector_value,
+							color: chart_color,
+							strokeWidth: 1,
+							classed: "dashed"
+						});
+					}
+					
+					if(chart_type == "vector")
+					{
+						if( window_type == "new") 
+						{
+							datas.push(vector_data);
+						}
+						else
+						{
+							if(window_type == "exist1")
+							{
+								for(var i = 0; i < vector_data.length; i++)
+								{
+									datas[0].push(vector_data[i]);
+								}
+							}
+							if(window_type == "exist2")
+							{
+								//datas[1].push(vector_data);
+								for(var i = 0; i < vector_data.length; i++)
+								{
+									datas[1].push(vector_data[i]);
+								}
+							}
+						}
+					}					
+				}
+			
+				ChartDrawing(select_chart);
+			});
+		}
+		
+		function addGraph()
+		{
+			
+			chart_shortname = document.getElementById("chart-shortname").value;
+			chart_title = document.getElementById("chart-title").value;
+			data_url = document.getElementById("json-url").value;
+			chart_type = document.getElementById("chart-type").value;
+			chart_color = '#' + document.getElementById("chart-color").value;
+			
+			if(data_url == "")
+			{
+				alert("Input Data URL");
+			}
+			
+			if(document.getElementById("axis-type").value == "right")
+			{
+				axis_type = true;
+			}
+			else
+			{
+				axis_type = false;
+			}
+			
+			tooltip_type = document.getElementById("tooltip-type").value;
+			window_type = document.getElementById("window-type").value;
+			
+			readyData();
+		}
+		
+		function setChartType(){}
+		function setAxisType(){}
+		function setTooltipType(){}
+		function setWindowType(){}
+		
+		function clearGraph(){
+			svg = d3.selectAll("svg").remove();		
+		}
+	</script>
+
+</html>
+		
+
